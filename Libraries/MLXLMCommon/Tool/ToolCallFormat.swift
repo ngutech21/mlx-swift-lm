@@ -186,7 +186,8 @@ public enum ToolCallFormat: String, Hashable, Sendable, Codable, CaseIterable {
         tokenizer: any Tokenizer,
         tools: [[String: any Sendable]]?,
         stopStrings: Set<String>,
-        toolCallPolicy: ToolCallPolicy = .init()
+        toolCallPolicy: ToolCallPolicy = .init(),
+        initialReasoning: ReasoningConfig? = nil
     ) -> any TokenStreamDecoder {
         if let decoder = makeProtocolTokenStreamDecoder(
             tokenizer: tokenizer, tools: tools, stopStrings: stopStrings,
@@ -196,7 +197,7 @@ public enum ToolCallFormat: String, Hashable, Sendable, Codable, CaseIterable {
         }
         return StandardTokenStreamDecoder(
             tokenizer: tokenizer, format: self, tools: tools, stopStrings: stopStrings,
-            toolCallPolicy: toolCallPolicy)
+            toolCallPolicy: toolCallPolicy, initialReasoning: initialReasoning)
     }
 
     /// Builds a decoder only for formats which own a framed token protocol.

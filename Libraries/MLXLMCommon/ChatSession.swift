@@ -1131,7 +1131,14 @@ public final class ChatSession {
                             pendingOnDemandComponents(
                                 of: model, among: ModelComponent.needed(by: preparedInput)))
                         var input = preparedInput
-                        var prefilledReasoningStartDelimiter: String?
+                        let promptTokenIds = preparedInput.text.tokens.asArray(Int.self)
+                        let prefilledReasoningStartDelimiter =
+                            ChatSession.prefilledReasoningStartDelimiter(
+                                in: promptTokenIds, config: modelConfiguration.reasoningConfig,
+                                tokenizer: tokenizer)
+                        let initialReasoning =
+                            prefilledReasoningStartDelimiter == nil
+                            ? nil : modelConfiguration.reasoningConfig
                         pendingMessages.removeAll()
 
                         let speculativeMemoryEvaluation: SpeculativeDecodingMemoryEvaluation?
@@ -1162,11 +1169,6 @@ public final class ChatSession {
                             preparedInput.image != nil || preparedInput.video != nil
                             || preparedInput.audio != nil
                         if var currentConversation = conversation {
-                            let promptTokenIds = preparedInput.text.tokens.asArray(Int.self)
-                            prefilledReasoningStartDelimiter =
-                                ChatSession.prefilledReasoningStartDelimiter(
-                                    in: promptTokenIds, config: modelConfiguration.reasoningConfig,
-                                    tokenizer: tokenizer)
                             let cachedTokenIds = currentConversation.cachedTokens
                             assert(
                                 kvCache.nativeAttentionOffsetsAreAligned,
@@ -1344,7 +1346,8 @@ public final class ChatSession {
                                     tokenizer: tokenizer,
                                     iterator: iterator,
                                     tools: toolValidationSchemas,
-                                    toolCallPolicy: generateParameters.toolCallPolicy)
+                                    toolCallPolicy: generateParameters.toolCallPolicy,
+                                    initialReasoning: initialReasoning)
                             )
                         }
 
@@ -1468,7 +1471,8 @@ public final class ChatSession {
                                             tokenizer: tokenizer,
                                             iterator: iterator,
                                             tools: toolValidationSchemas,
-                                            toolCallPolicy: generateParameters.toolCallPolicy))
+                                            toolCallPolicy: generateParameters.toolCallPolicy,
+                                            initialReasoning: initialReasoning))
                                 }
                             }
                         } else {

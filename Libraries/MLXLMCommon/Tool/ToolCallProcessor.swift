@@ -99,10 +99,13 @@ public class ToolCallProcessor {
     ///     only an exactly declared function name can be promoted by recovery.
     ///   - toolCallPolicy: Recovery and validation rules. Defaults to conservative
     ///     recovery and permissive schema validation; tool-name authorization always applies.
+    ///   - initialReasoning: The reasoning block opened by the prepared prompt.
+    ///     Its bytes stay response text until a canonical or implicit close.
     public init(
         format: ToolCallFormat = .json,
         tools: [[String: any Sendable]]? = nil,
-        toolCallPolicy: ToolCallPolicy = .init()
+        toolCallPolicy: ToolCallPolicy = .init(),
+        initialReasoning: ReasoningConfig? = nil
     ) {
         self.validationPolicy = toolCallPolicy.validation
         self.format = format
@@ -122,7 +125,8 @@ public class ToolCallProcessor {
             primaryFormat: format,
             policy: toolCallPolicy.recovery,
             tools: tools,
-            allowedToolNames: self.allowedToolNames)
+            allowedToolNames: self.allowedToolNames,
+            initialReasoning: initialReasoning)
     }
 
     // MARK: - Computed Properties

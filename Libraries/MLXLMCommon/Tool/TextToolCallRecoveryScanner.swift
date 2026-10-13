@@ -73,7 +73,7 @@ struct TextToolCallRecoveryScanner: Sendable {
 
     private enum Context: Sendable, Equatable {
         case response
-        case reasoning(close: String)
+        case reasoning(close: String, implicitEnds: [String])
         case codeFence(character: Character, count: Int)
         case codeSpan(count: Int)
         case jsonValue
@@ -154,9 +154,19 @@ struct TextToolCallRecoveryScanner: Sendable {
         policy: ToolCallRecoveryPolicy,
         tools: [[String: any Sendable]]?,
         allowedToolNames: Set<String>?,
-        maximumBufferedByteCount: Int = 65_536
+        maximumBufferedByteCount: Int = 65_536,
+        initialReasoning: ReasoningConfig? = nil
     ) {
-        guard let tools, let allowedToolNames, !allowedToolNames.isEmpty else { return nil }
+        let tools = tools ?? []
+        let allowedToolNames = allowedToolNames ?? []
+        guard !allowedToolNames.isEmpty || initialReasoning != nil else { return nil }
+        if let initialReasoning, !initialReasoning.endDelimiter.isEmpty {
+            context = .reasoning(
+                close: initialReasoning.endDelimiter,
+                implicitEnds: initialReasoning.implicitEndDelimiters.filter {
+                    !$0.isEmpty && $0 != initialReasoning.endDelimiter
+                })
+        }
 
         self.primaryFormat = primaryFormat
         self.policy = policy
@@ -279,15 +289,25 @@ struct TextToolCallRecoveryScanner: Sendable {
 
         scanLoop: while !buffer.isEmpty {
             switch context {
-            case .reasoning(let close):
-                if let range = buffer.range(of: close) {
-                    appendProtectedText(String(buffer[..<range.upperBound]), to: &output)
-                    buffer = String(buffer[range.upperBound...])
+            case .reasoning(let close, let implicitEnds):
+                let delimiters = [close] + implicitEnds
+                let boundary = delimiters.compactMap { delimiter in
+                    buffer.range(of: delimiter).map { (delimiter: delimiter, range: $0) }
+                }.min { $0.range.lowerBound < $1.range.lowerBound }
+                if let boundary {
+                    let end =
+                        boundary.delimiter == close
+                        ? boundary.range.upperBound : boundary.range.lowerBound
+                    appendProtectedText(String(buffer[..<end]), to: &output)
+                    buffer = String(buffer[end...])
                     context = .response
                     continue
                 }
-                releaseProtectedAllButSuffix(
-                    longestSuffix(in: buffer, matchingPrefixOf: close), &output)
+                let retained =
+                    delimiters.map {
+                        longestSuffix(in: buffer, matchingPrefixOf: $0)
+                    }.max() ?? 0
+                releaseProtectedAllButSuffix(retained, &output)
                 break scanLoop
 
             case .codeFence(let character, let count):
@@ -440,7 +460,7 @@ struct TextToolCallRecoveryScanner: Sendable {
                 case .reasoning(let close):
                     appendProtectedText(match.signal.text, to: &output)
                     buffer.removeFirst(match.signal.text.count)
-                    context = .reasoning(close: close)
+                    context = .reasoning(close: close, implicitEnds: [])
 
                 case .nativeFrame(let endMarker):
                     // Keep the whole frame buffered; it is emitted verbatim

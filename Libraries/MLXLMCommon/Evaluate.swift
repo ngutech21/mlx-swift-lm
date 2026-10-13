@@ -2293,7 +2293,8 @@ func generateTaskRecordingTokens<TOKEN: TokenIteratorProtocol>(
     iterator: consuming TOKEN,
     wiredMemoryTicket: WiredMemoryTicket? = nil,
     tools: [[String: any Sendable]]? = nil,
-    toolCallPolicy: ToolCallPolicy = .init()
+    toolCallPolicy: ToolCallPolicy = .init(),
+    initialReasoning: ReasoningConfig? = nil
 ) -> (AsyncStream<Generation>, Task<[Int], Never>) {
     generateLoopTask(
         promptTokenCount: promptTokenCount,
@@ -2307,7 +2308,8 @@ func generateTaskRecordingTokens<TOKEN: TokenIteratorProtocol>(
             stopStrings: modelConfiguration.effectiveStopStrings,
             format: modelConfiguration.toolCallFormat ?? .json,
             tools: tools,
-            toolCallPolicy: toolCallPolicy
+            toolCallPolicy: toolCallPolicy,
+            initialReasoning: initialReasoning
         )
     )
 }

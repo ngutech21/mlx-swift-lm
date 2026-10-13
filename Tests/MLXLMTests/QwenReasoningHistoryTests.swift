@@ -178,6 +178,51 @@ final class QwenReasoningHistoryTests: XCTestCase {
         XCTAssertEqual(try text(in: raw), matching.content)
     }
 
+    func testPrefilledReasoningFenceDoesNotHideWriteFileAfterClose() async throws {
+        let tokenizer = ByteTokenizer()
+        let thought = "Plan.\n```python\ndef choose_limit():\n    return 50\n</think>\n\n"
+        let call = """
+            <tool_call>
+            <function=write_file>
+            <parameter=content>print(50)</parameter>
+            <parameter=path>/app/src/limiter/window.py</parameter>
+            </function>
+            </tool_call>
+            """
+        let output = tokenizer.encode(text: thought + call, addSpecialTokens: false) + [256]
+        let (_, continuation) = AsyncStream<[RecordedMessage]>.makeStream()
+        let context = ModelContext(
+            configuration: ModelConfiguration(
+                id: "reasoning-tool-test", eosTokenIds: [256], toolCallFormat: .qwen35,
+                reasoningConfig: QwenReasoningProtocol.tagged),
+            model: ScriptedModel(output: output),
+            processor: RecordingProcessor(
+                promptTail: "<think>\n", tokenizer: tokenizer, continuation: continuation),
+            tokenizer: tokenizer)
+        let session = ChatSession(
+            context,
+            generateParameters: GenerateParameters(maxTokens: output.count, temperature: 0),
+            tools: [["function": ["name": "write_file"] as [String: any Sendable]]])
+        for prompt in ["first", "cached continuation"] {
+            var visible = ""
+            var calls: [ToolCall] = []
+            var rejected: [RejectedToolCall] = []
+            for try await event in session.streamDetails(to: prompt) {
+                if let chunk = event.chunk { visible += chunk }
+                if let call = event.toolCall { calls.append(call) }
+                if let rejection = event.rejectedToolCall { rejected.append(rejection) }
+            }
+            XCTAssertEqual(calls.count, 1, prompt)
+            XCTAssertEqual(calls.first?.function.name, "write_file")
+            XCTAssertEqual(calls.first?.function.arguments["content"], .string("print(50)"))
+            XCTAssertEqual(
+                calls.first?.function.arguments["path"], .string("/app/src/limiter/window.py"))
+            XCTAssertEqual(visible, thought, "Generated reasoning bytes must remain unchanged.")
+            XCTAssertTrue(rejected.isEmpty)
+        }
+        continuation.finish()
+    }
+
     func testLengthLimitedOpenReasoningIsNotCompletedByTheGenerator() async throws {
         let retained = try await retainedAssistant(
             promptTail: "<think>\n", output: "unfinished", maxTokens: 4)

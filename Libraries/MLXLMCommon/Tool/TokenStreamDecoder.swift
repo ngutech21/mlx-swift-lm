@@ -66,11 +66,13 @@ struct StandardTokenStreamDecoder: TokenStreamDecoder {
         format: ToolCallFormat,
         tools: [[String: any Sendable]]?,
         stopStrings: Set<String>,
-        toolCallPolicy: ToolCallPolicy = .init()
+        toolCallPolicy: ToolCallPolicy = .init(),
+        initialReasoning: ReasoningConfig? = nil
     ) {
         self.detokenizer = NaiveStreamingDetokenizer(tokenizer: tokenizer)
         self.toolCallProcessor = ToolCallProcessor(
-            format: format, tools: tools, toolCallPolicy: toolCallPolicy)
+            format: format, tools: tools, toolCallPolicy: toolCallPolicy,
+            initialReasoning: initialReasoning)
         self.stopStringFilter = StopStringFilter(stopStrings: stopStrings)
     }
 
